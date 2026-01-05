@@ -14,7 +14,8 @@ ATHLETES_DIR = os.path.join(DATA_DIR, "athletes")
 SHARED_DIR = os.path.join(DATA_DIR, "shared")
 TRAINING_PLANS_DIR = os.path.join(DATA_DIR, "training_plans")
 
-DROPBOX_SYNC_FOLDER = r"C:\Users\User\Dropbox\GAA_Shared"
+DROPBOX_SYNC_FOLDER = os.path.join(DATA_DIR, "dropbox_export")
+os.makedirs(DROPBOX_SYNC_FOLDER, exist_ok=True)
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(ATHLETES_DIR, exist_ok=True)
