@@ -9,7 +9,7 @@ from datetime import datetime
 # Setup
 # ------------------------------------
 st.set_page_config(page_title="Fitness Training App", layout="wide")
-st.title("🏋️ Fitness Training & Recovery App")
+st.title("Fitness Training & Recovery App")
 
 # Ensure local data folder exists
 os.makedirs("shared_data", exist_ok=True)
@@ -47,7 +47,7 @@ page = st.sidebar.radio(
 # ATHLETE MODE (Training Calendar + Sharing)
 # ------------------------------------
 if page == "Athlete Mode":
-    st.header("👤 Athlete Mode — Training Calendar & Sharing")
+    st.header("Athlete Mode — Training Calendar & Sharing")
 
     # Input fields
     date = st.date_input("Training Date")
@@ -72,7 +72,7 @@ if page == "Athlete Mode":
     # -----------------------------------
     # SHARE DATA WITH COACH
     # -----------------------------------
-    st.subheader("🔗 Share Your Training With a Coach")
+    st.subheader("Share Your Training With a Coach")
 
     if st.button("Generate Share Code"):
         share_code = str(uuid.uuid4())[:8]  # short code
@@ -95,7 +95,7 @@ if page == "Athlete Mode":
 # COACH MODE (View Athlete Data)
 # ------------------------------------
 elif page == "Coach Mode":
-    st.header("🎓 Coach Mode — View Athlete Training Data")
+    st.header("Coach Mode — View Athlete Training Data")
 
     share_code = st.text_input("Enter Athlete Share Code")
 
@@ -108,10 +108,10 @@ elif page == "Coach Mode":
 
             st.success("Athlete data loaded successfully!")
 
-            st.subheader("🏋️ Training Log")
+            st.subheader("Training Log")
             st.table(pd.DataFrame(data["training_log"]))
 
-            st.subheader("🍎 Calorie Log")
+            st.subheader("Calorie Log")
             st.table(pd.DataFrame(data["calorie_log"]))
 
             st.caption(f"Last updated: {data['timestamp']}")
@@ -124,7 +124,7 @@ elif page == "Coach Mode":
 # DIETARY TRACKER
 # ------------------------------------
 elif page == "Dietary Tracker":
-    st.header("🍎 Dietary & Calorie Tracker")
+    st.header("Dietary & Calorie Tracker")
 
     food = st.text_input("Food Item")
     calories = st.number_input("Calories", min_value=0)
@@ -143,7 +143,7 @@ elif page == "Dietary Tracker":
 # CHAT ROOM
 # ------------------------------------
 elif page == "Chat Room / Help Line":
-    st.header("💬 Chat Room / Help Line")
+    st.header("Chat Room / Help Line")
 
     message = st.text_input("Enter your message:")
 
@@ -160,10 +160,10 @@ elif page == "Chat Room / Help Line":
 # RECOVERY ADVICE
 # ------------------------------------
 elif page == "Recovery Advice":
-    st.header("🛌 Recovery Advice After Training")
+    st.header("Recovery Advice After Training")
 
     st.write("""
-### 🧘 General Recovery Tips
+### General Recovery Tips
 - Cool down 5–10 minutes  
 - Stretch after training  
 - Hydrate properly  
@@ -171,17 +171,17 @@ elif page == "Recovery Advice":
 - Aim for 7–9 hours sleep  
 - Foam rolling helps reduce soreness  
 
-### 🥤 Hydration  
+### Hydration  
 Aim for 2–3L of water daily.
 
-### 🍽 Nutrition  
+### Nutrition  
 Post-workout ideas:
 - Protein shake  
 - Chicken + rice  
 - Oatmeal + nuts  
 - Yogurt + fruit  
 
-### 🔥 Overtraining Signs  
+### Overtraining Signs  
 - Persistent fatigue  
 - Low motivation  
 - Poor sleep  
@@ -189,3 +189,4 @@ Post-workout ideas:
 
 If symptoms appear, increase rest days.
 """)
+
