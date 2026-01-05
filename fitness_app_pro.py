@@ -323,7 +323,7 @@ if "family_dashboard_code" not in st.session_state:
 # ATHLETE PORTAL
 # -----------------------
 if mode == "Athlete Portal":
-    st.header("🏋️ Athlete Portal")
+    st.header("Athlete Portal")
     sub_mode = st.radio("Select:", ["Register", "Login"])
 
     # --- Athlete Registration ---
@@ -397,7 +397,7 @@ if mode == "Athlete Portal":
         # Training Log + Calendar + Share with Coach
         # -------------------
         if athlete_tab == "Training Log":
-            st.subheader("📅 Log Training Session")
+            st.subheader("Log Training Session")
             logs = data.get("training_log", [])
             date = st.date_input("Date", datetime.date.today())
             minutes = st.number_input("Minutes trained", 0, 300)
@@ -410,7 +410,7 @@ if mode == "Athlete Portal":
                 st.success("Session saved!")
 
             st.markdown("---")
-            st.subheader("📊 Weekly & Daily Load Alerts")
+            st.subheader("Weekly & Daily Load Alerts")
             alerts = generate_overtraining_alerts(logs)
             if alerts:
                 for _, level, msg in alerts:
@@ -443,11 +443,11 @@ if mode == "Athlete Portal":
 
                 # Download + Share with Coach
                 st.markdown("---")
-                st.subheader("📥 Download / Share Training Data")
+                st.subheader("Download / Share Training Data")
 
                 csv_bytes = df.to_csv(index=False).encode("utf-8")
                 st.download_button(
-                    label="📥 Download Training Log (CSV)",
+                    label="Download Training Log (CSV)",
                     data=csv_bytes,
                     file_name=f"{u}_training_log.csv",
                     mime="text/csv",
@@ -455,7 +455,7 @@ if mode == "Athlete Portal":
 
                 json_bytes = json.dumps(logs, indent=2).encode("utf-8")
                 st.download_button(
-                    label="📥 Download Training Log (JSON)",
+                    label="Download Training Log (JSON)",
                     data=json_bytes,
                     file_name=f"{u}_training_log.json",
                     mime="application/json",
@@ -466,7 +466,7 @@ if mode == "Athlete Portal":
                 )
 
                 st.markdown("---")
-                st.subheader("📤 Share Weekly Snapshot to Coach (with Code)")
+                st.subheader("Share Weekly Snapshot to Coach (with Code)")
 
                 if st.button("Share Weekly Snapshot"):
                     weekly_summary = compute_weekly_summary(logs)
@@ -523,7 +523,7 @@ if mode == "Athlete Portal":
         # Gym / Cardio goals & RPE
         # -------------------
         elif athlete_tab == "Gym/Cardio & Goals":
-            st.subheader("🏃 Gym / Cardio Sessions & Goals")
+            st.subheader("Gym / Cardio Sessions & Goals")
             gym_sessions = data.get("gym_sessions", [])
 
             g_date = st.date_input("Date", datetime.date.today(), key="gym_date")
@@ -557,7 +557,7 @@ if mode == "Athlete Portal":
                 st.dataframe(gdf[["date", "type", "minutes", "goal", "rpe", "notes"]].head(20))
 
                 # Simple RPE guidance
-                st.markdown("### 🔍 Load & RPE Check")
+                st.markdown("### Load & RPE Check")
                 last_7 = gdf.head(7).sort_values("date")
                 high_rpe_days = last_7[last_7["rpe"] >= 8]
                 if len(high_rpe_days) >= 2:
@@ -586,7 +586,7 @@ if mode == "Athlete Portal":
         # Diet / Macros
         # -------------------
         elif athlete_tab == "Diet / Macros":
-            st.subheader("🍎 Log Diet / Macros")
+            st.subheader("Log Diet / Macros")
             diet_log = data.get("diet_log", [])
 
             meal = st.text_input("Meal / Snack")
@@ -635,7 +635,7 @@ if mode == "Athlete Portal":
         # Fixtures
         # -------------------
         elif athlete_tab == "Fixtures":
-            st.subheader("📆 Upcoming Match Fixtures")
+            st.subheader("Upcoming Match Fixtures")
             fixtures = data.get("fixtures", [])
 
             col1, col2 = st.columns(2)
@@ -683,7 +683,7 @@ if mode == "Athlete Portal":
         # Homework / Study
         # -------------------
         elif athlete_tab == "Homework / Study":
-            st.subheader("📚 Homework & Study Log")
+            st.subheader("Homework & Study Log")
             homework_log = data.get("homework_log", [])
 
             h_date = st.date_input("Date", datetime.date.today(), key="hw_date")
@@ -729,7 +729,7 @@ if mode == "Athlete Portal":
         # Mental Wellbeing
         # -------------------
         elif athlete_tab == "Mental Wellbeing":
-            st.subheader("🧠 Mental Wellbeing Check-In")
+            st.subheader("Mental Wellbeing Check-In")
             wellbeing_log = data.get("wellbeing_log", [])
 
             w_date = st.date_input("Date", datetime.date.today(), key="wb_date")
@@ -783,7 +783,7 @@ if mode == "Athlete Portal":
         # Teams & Coach Codes
         # -------------------
         elif athlete_tab == "Teams & Coach Codes":
-            st.subheader("👥 Teams & Family / Coach Codes")
+            st.subheader("Teams & Family / Coach Codes")
 
             st.markdown("#### Family codes you are linked to")
             fam_links = find_families_for_athlete(u)
@@ -838,7 +838,7 @@ if mode == "Athlete Portal":
         # Chat / CoachBot
         # -------------------
         elif athlete_tab == "Chat / CoachBot":
-            st.subheader("💬 Chat / Motivation Bot")
+            st.subheader("Chat / Motivation Bot")
 
             chat_log = data.get("chat", [])
 
@@ -848,7 +848,7 @@ if mode == "Athlete Portal":
                     role = entry.get("role", "athlete")
                     text = entry.get("text", entry.get("msg", ""))
                     ts = entry.get("time", entry.get("date", ""))
-                    prefix = "🧍‍♂️ You" if role == "athlete" else "🤖 CoachBot"
+                    prefix = "You" if role == "athlete" else "CoachBot"
                     st.markdown(f"**{prefix}** ({ts}): {text}")
 
             message = st.text_area("Type a message to CoachBot")
@@ -865,25 +865,25 @@ if mode == "Athlete Portal":
                         reply = (
                             "Totally normal to feel tired after big sessions. "
                             "Listen to your body – mixing in an easier day, stretching, or an early night "
-                            "can actually make you stronger for the next hard block. 💪"
+                            "can actually make you stronger for the next hard block."
                         )
                     elif any(word in lower for word in ["exam", "study", "school", "homework"]):
                         reply = (
                             "Balancing exams and sport is a challenge, but you’re building brilliant habits. "
                             "Try planning your week so heavy study days get lighter training, and vice versa. "
-                            "Small, consistent blocks beat last-minute panic every time. 📚⚽"
+                            "Small, consistent blocks beat last-minute panic every time."
                         )
                     elif any(word in lower for word in ["nervous", "anxious", "worried"]):
                         reply = (
                             "Nerves usually mean you care – that’s a strength. "
                             "Control the controllables: sleep, food, warm-up, and your first few minutes in a game or session. "
-                            "One action at a time. You’ve got this. 💚"
+                            "One action at a time. You’ve got this."
                         )
                     else:
                         reply = (
                             "You’re putting in the work, and that matters. "
                             "Keep an eye on balance: training, school, friends, and downtime all play a part. "
-                            "Proud of the effort you’re making – keep going, but don’t forget to breathe. 🌟"
+                            "Proud of the effort you’re making – keep going, but don’t forget to breathe."
                         )
 
                     chat_log.append(
@@ -899,7 +899,7 @@ if mode == "Athlete Portal":
         # Recovery Advice
         # -------------------
         elif athlete_tab == "Recovery Advice":
-            st.subheader("🛌 Recovery Advice")
+            st.subheader("Recovery Advice")
             training_log = data.get("training_log", [])
             gym_log = data.get("gym_sessions", [])
 
@@ -927,7 +927,7 @@ if mode == "Athlete Portal":
         # Account / Family Info (+ Logout)
         # -------------------
         elif athlete_tab == "Account / Family Info":
-            st.subheader("👤 Account & Family Info")
+            st.subheader("Account & Family Info")
 
             st.write(f"**Username:** {u}")
 
@@ -960,7 +960,7 @@ if mode == "Athlete Portal":
 # COACH DASHBOARD
 # -----------------------
 elif mode == "Coach Dashboard":
-    st.header("🎓 Coach Dashboard")
+    st.header("Coach Dashboard")
 
     coach_tab = st.radio(
         "Choose view",
@@ -1013,7 +1013,7 @@ elif mode == "Coach Dashboard":
                     st.write(f"**Share code:** {matched_snapshot.get('share_code')}")
                     st.write(f"**Generated at:** {matched_snapshot.get('generated_at')}")
 
-                    st.markdown("### 📋 Weekly Load Summary")
+                    st.markdown("### Weekly Load Summary")
 
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Training (min/week)", weekly_train["total_minutes"])
@@ -1028,7 +1028,7 @@ elif mode == "Coach Dashboard":
                         st.error("Overall load (training + study) is very high — worth a conversation about balance.")
 
                     st.markdown("---")
-                    st.write("### 🏋️ Training Detail")
+                    st.write("### Training Detail")
                     st.write(f"**Weekly training minutes:** {weekly_train['total_minutes']}")
 
                     alerts = generate_overtraining_alerts(logs)
@@ -1048,7 +1048,7 @@ elif mode == "Coach Dashboard":
 
                         csv_bytes = df.to_csv(index=False).encode("utf-8")
                         st.download_button(
-                            label="📥 Download Athlete Training Log (CSV)",
+                            label="Download Athlete Training Log (CSV)",
                             data=csv_bytes,
                             file_name=f"{athlete_name}_training_log.csv",
                             mime="text/csv",
@@ -1056,7 +1056,7 @@ elif mode == "Coach Dashboard":
 
                     if hw_logs:
                         st.markdown("---")
-                        st.write("### 📚 Homework / Study Detail")
+                        st.write("### Homework / Study Detail")
 
                         hw_df = pd.DataFrame(hw_logs)
                         hw_df["date"] = pd.to_datetime(hw_df["date"])
@@ -1136,7 +1136,7 @@ elif mode == "Coach Dashboard":
 # PARENT / GUARDIAN DASHBOARD
 # -----------------------
 elif mode == "Parent / Guardian":
-    st.header("👨‍👩‍👦 Parent / Guardian Dashboard")
+    st.header("Parent / Guardian Dashboard")
 
     parent_tab = st.radio(
         "Select:",
@@ -1266,14 +1266,14 @@ elif mode == "Parent / Guardian":
                         cal_df = pd.DataFrame(family_calendar_rows)
                         cal_df = cal_df.sort_values("Date")
 
-                        st.write("### 📅 This Week's Family Training Calendar (List View)")
+                        st.write("### This Week's Family Training Calendar (List View)")
                         st.dataframe(cal_df)
                     else:
                         st.info("No training sessions logged for this week yet.")
 
                     # --- Per child weekly overview ---
                     st.markdown("---")
-                    st.write("### 🧒 Per-Athlete Weekly Summary")
+                    st.write("### Per-Athlete Weekly Summary")
 
                     cols = st.columns(min(len(children), 4) or 1)
                     for idx, child in enumerate(children):
@@ -1289,7 +1289,7 @@ elif mode == "Parent / Guardian":
 
                     # --- Log training for a selected child ---
                     st.markdown("---")
-                    st.write("### ✏️ Log Training for a Family Member")
+                    st.write("### Log Training for a Family Member")
 
                     usernames = [c.get("username") for c in children]
                     selected_child = st.selectbox(
@@ -1323,7 +1323,7 @@ elif mode == "Parent / Guardian":
 
                     # --- Monthly calendar with coloured dots ---
                     st.markdown("---")
-                    st.write("### 📆 Month View (Current Month)")
+                    st.write("### Month View (Current Month)")
 
                     year = today.year
                     month = today.month
@@ -1365,7 +1365,7 @@ elif mode == "Parent / Guardian":
 # ADMIN / SETTINGS
 # -----------------------
 elif mode == "Admin / Settings":
-    st.header("⚙️ Admin Settings")
+    st.header("Admin Settings")
 
     st.subheader("(Optional) Legacy Coach Registration")
     st.write(
@@ -1381,3 +1381,4 @@ elif mode == "Admin / Settings":
     st.markdown("---")
     st.subheader("Dropbox sync folder")
     st.write(f"Currently: {DROPBOX_SYNC_FOLDER}")
+
