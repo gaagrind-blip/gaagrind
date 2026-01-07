@@ -1,5 +1,5 @@
 import streamlit as st
-import json, os, datetime, calendar
+import json, os, datetime
 import pandas as pd
 import random
 import string
@@ -40,8 +40,20 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+def safe_filename(name: str) -> str:
+    keep = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- "
+    cleaned = "".join(c for c in name if c in keep).strip().replace(" ", "_")
+    return cleaned[:80] if cleaned else "plan"
+
+def clean_username(raw: str) -> str:
+    """Normalise usernames so Register/Login always point to the same stored profile."""
+    raw = (raw or "").strip()
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+    cleaned = "".join(ch for ch in raw if ch in allowed)
+    return cleaned.lower()
+
 def athlete_file(username: str) -> str:
-    # Always store athlete profiles under a normalised filename
+    """Always store athlete profiles under a normalised filename."""
     return os.path.join(ATHLETES_DIR, clean_username(username) + ".json")
 
 def compute_weekly_summary(entries, minutes_key="minutes"):
@@ -59,6 +71,7 @@ def compute_weekly_summary(entries, minutes_key="minutes"):
     return total_minutes
 
 def weekly_color(total_minutes):
+    # (Kept as-is from your previous version)
     if total_minutes >= 300:
         return "🟢", "Excellent"
     elif total_minutes >= 240:
@@ -72,17 +85,20 @@ def weekly_color(total_minutes):
     else:
         return "🟢", "Light"
 
-def safe_filename(name: str) -> str:
-    keep = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- "
-    cleaned = "".join(c for c in name if c in keep).strip().replace(" ", "_")
-    return cleaned[:80] if cleaned else "plan"
-
-def clean_username(raw: str) -> str:
-    """Normalise usernames so Register/Login always point to the same stored profile."""
-    raw = (raw or "").strip()
-    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
-    cleaned = "".join(ch for ch in raw if ch in allowed)
-    return cleaned.lower()
+def stress_label(stress: int):
+    """
+    ✅ Correct mapping:
+    1 = low stress (good)
+    10 = very high stress (not good)
+    """
+    if stress <= 3:
+        return "🟢 Great", "Low stress"
+    elif stress <= 6:
+        return "🟡 Okay", "Moderate stress"
+    elif stress <= 8:
+        return "🟠 High", "High stress"
+    else:
+        return "🔴 Struggling", "Very high stress"
 
 def plans_folder_for_team(team_code: str) -> str:
     return os.path.join(TRAINING_PLANS_DIR, f"team_{team_code}")
@@ -138,20 +154,17 @@ def get_athlete_for_family_code(code: str):
 # Login Functions
 # -----------------------------
 def save_athlete(u, data):
-    # Ensure profile stores a canonical username
     u_clean = clean_username(u)
     if isinstance(data, dict):
         data.setdefault("username", u_clean)
     save_json(athlete_file(u_clean), data)
 
 def check_athlete_login(u, p):
-    # Try normalised filename first
     u_clean = clean_username(u)
     file = athlete_file(u_clean)
 
-    # Backwards-compatibility: older versions saved usernames as-typed
+    # Legacy fallback (older versions used raw typed username filenames)
     legacy = os.path.join(ATHLETES_DIR, (u or "").strip() + ".json")
-
     if not os.path.exists(file) and os.path.exists(legacy):
         file = legacy
 
@@ -161,7 +174,7 @@ def check_athlete_login(u, p):
     data = load_json(file)
     ok = (data.get("pin") == p)
 
-    # If login succeeds on legacy file, migrate to normalised file so future logins work
+    # Auto-migrate legacy file if login succeeds
     if ok and file == legacy:
         data["username"] = u_clean
         save_json(athlete_file(u_clean), data)
@@ -191,7 +204,6 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- Simple styling (unchanged) ---
 st.markdown(
     """
 <style>
@@ -208,7 +220,7 @@ mode = st.sidebar.selectbox(
     ["Athlete Portal", "Coach Dashboard", "Parent / Guardian", "Admin / Settings"],
 )
 
-# Session State Initiation
+# Session State
 if "athlete_logged_in" not in st.session_state:
     st.session_state["athlete_logged_in"] = False
     st.session_state["athlete_user"] = ""
@@ -218,9 +230,6 @@ if "coach_logged_in" not in st.session_state:
     st.session_state["coach_logged_in"] = False
     st.session_state["coach_user"] = ""
 
-if "family_dashboard_code" not in st.session_state:
-    st.session_state["family_dashboard_code"] = ""
-
 # -----------------------------
 # Athlete Portal
 # -----------------------------
@@ -228,7 +237,7 @@ if mode == "Athlete Portal":
     st.header("🏋️ Athlete Portal")
     sub_mode = st.radio("Select:", ["Register", "Login"])
 
-    # Athlete Registration
+    # Register
     if sub_mode == "Register":
         st.subheader("New Athlete Registration")
         new_user_raw = st.text_input("Username", key="reg_user")
@@ -263,7 +272,7 @@ if mode == "Athlete Portal":
                 )
                 st.success(f"Athlete {new_user} registered! You can now log in.")
 
-    # Athlete Login
+    # Login
     elif sub_mode == "Login" and not st.session_state["athlete_logged_in"]:
         st.subheader("Athlete Login")
         u_raw = st.text_input("Username", key="login_user")
@@ -279,7 +288,7 @@ if mode == "Athlete Portal":
                 st.session_state["athlete_data"] = data
                 st.success(f"Welcome {u}")
 
-    # Athlete Main Area
+    # Main area
     if st.session_state["athlete_logged_in"]:
         u = st.session_state["athlete_user"]
         data = st.session_state["athlete_data"]
@@ -302,9 +311,7 @@ if mode == "Athlete Portal":
             ],
         )
 
-        # -----------------------------
         # Training Log
-        # -----------------------------
         if athlete_tab == "Training Log":
             st.subheader("📅 Training Log")
             entries = data.get("training_log", [])
@@ -317,21 +324,12 @@ if mode == "Athlete Portal":
                 date = st.date_input("Date", value=datetime.date.today(), key="train_date")
                 minutes = st.number_input("Minutes trained", min_value=0, max_value=600, value=60, key="train_mins")
             with col2:
-                session_type = st.selectbox(
-                    "Session type",
-                    ["Pitch", "Gym", "Match", "Recovery", "Other"],
-                    key="train_type",
-                )
+                session_type = st.selectbox("Session type", ["Pitch", "Gym", "Match", "Recovery", "Other"], key="train_type")
                 notes = st.text_area("Notes", key="train_notes")
 
             if st.button("Add Training Entry"):
                 entries.append(
-                    {
-                        "date": date.strftime("%Y-%m-%d"),
-                        "minutes": int(minutes),
-                        "type": session_type,
-                        "notes": notes,
-                    }
+                    {"date": date.strftime("%Y-%m-%d"), "minutes": int(minutes), "type": session_type, "notes": notes}
                 )
                 data["training_log"] = entries
                 save_athlete(u, data)
@@ -344,9 +342,7 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
         # Gym/Cardio & Goals
-        # -----------------------------
         elif athlete_tab == "Gym/Cardio & Goals":
             st.subheader("🏋️ Gym/Cardio & Goals")
             goals = data.get("goals", {})
@@ -367,14 +363,7 @@ if mode == "Athlete Portal":
             gnotes = st.text_area("Notes", key="gym_notes")
             if st.button("Add Gym/Cardio Entry"):
                 glog = data.get("gym_log", [])
-                glog.append(
-                    {
-                        "date": gdate.strftime("%Y-%m-%d"),
-                        "type": gtype,
-                        "minutes": int(gmins),
-                        "notes": gnotes,
-                    }
-                )
+                glog.append({"date": gdate.strftime("%Y-%m-%d"), "type": gtype, "minutes": int(gmins), "notes": gnotes})
                 data["gym_log"] = glog
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -387,9 +376,7 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
         # Diet / Macros
-        # -----------------------------
         elif athlete_tab == "Diet / Macros":
             st.subheader("🥗 Diet / Macros")
             st.write("Log meals / notes (simple tracker).")
@@ -398,13 +385,7 @@ if mode == "Athlete Portal":
             desc = st.text_area("What did you eat?", key="diet_desc")
             if st.button("Add Diet Entry"):
                 dlog = data.get("diet_log", [])
-                dlog.append(
-                    {
-                        "date": ddate.strftime("%Y-%m-%d"),
-                        "meal": meal,
-                        "desc": desc,
-                    }
-                )
+                dlog.append({"date": ddate.strftime("%Y-%m-%d"), "meal": meal, "desc": desc})
                 data["diet_log"] = dlog
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -416,9 +397,7 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
         # Training Plans
-        # -----------------------------
         elif athlete_tab == "Training Plans":
             st.subheader("🗂️ Training Plans")
             st.write("Plans can be personal or assigned via team code (Coach).")
@@ -451,9 +430,7 @@ if mode == "Athlete Portal":
                     else:
                         st.info("No team plans available yet for this team.")
 
-        # -----------------------------
         # Fixtures
-        # -----------------------------
         elif athlete_tab == "Fixtures":
             st.subheader("📆 Fixtures")
             fixtures = data.get("fixtures", [])
@@ -461,13 +438,7 @@ if mode == "Athlete Portal":
             opp = st.text_input("Opponent", key="fix_opp")
             venue = st.text_input("Venue", key="fix_venue")
             if st.button("Add Fixture"):
-                fixtures.append(
-                    {
-                        "date": fdate.strftime("%Y-%m-%d"),
-                        "opponent": opp,
-                        "venue": venue,
-                    }
-                )
+                fixtures.append({"date": fdate.strftime("%Y-%m-%d"), "opponent": opp, "venue": venue})
                 data["fixtures"] = fixtures
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -478,9 +449,7 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
         # Homework / Study
-        # -----------------------------
         elif athlete_tab == "Homework / Study":
             st.subheader("📚 Homework / Study")
             slog = data.get("study_log", [])
@@ -489,14 +458,7 @@ if mode == "Athlete Portal":
             mins = st.number_input("Minutes", min_value=0, max_value=600, value=30, key="study_mins")
             snote = st.text_area("What did you do?", key="study_notes")
             if st.button("Add Study Entry"):
-                slog.append(
-                    {
-                        "date": sdate.strftime("%Y-%m-%d"),
-                        "subject": subject,
-                        "minutes": int(mins),
-                        "notes": snote,
-                    }
-                )
+                slog.append({"date": sdate.strftime("%Y-%m-%d"), "subject": subject, "minutes": int(mins), "notes": snote})
                 data["study_log"] = slog
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -507,15 +469,21 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
-        # Mental Wellbeing
-        # -----------------------------
+        # Mental Wellbeing (✅ FIXED LABEL)
         elif athlete_tab == "Mental Wellbeing":
             st.subheader("🧠 Mental Wellbeing")
             wlog = data.get("wellbeing_log", [])
             wdate = st.date_input("Date", value=datetime.date.today(), key="wb_date")
             mood = st.selectbox("Mood", ["😀 Great", "🙂 Good", "😐 Ok", "😟 Low", "😢 Struggling"], key="wb_mood")
-            stress = st.slider("Stress level (1-10)", 1, 10, 5, key="wb_stress")
+            stress = st.slider(
+                "Stress level (1-10)",
+                1, 10, 5,
+                key="wb_stress"
+            )
+            # ✅ Correct interpretation preview
+            band, desc = stress_label(int(stress))
+            st.info(f"Current selection: **{stress}/10** — **{band}** ({desc})")
+
             wnote = st.text_area("Notes", key="wb_notes")
             if st.button("Add Wellbeing Entry"):
                 wlog.append(
@@ -536,9 +504,7 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # -----------------------------
         # Teams & Coach Codes
-        # -----------------------------
         elif athlete_tab == "Teams & Coach Codes":
             st.subheader("👥 Teams & Coach Codes")
             teams = data.get("teams", [])
@@ -560,18 +526,14 @@ if mode == "Athlete Portal":
                     else:
                         st.info("Already joined that team.")
 
-        # -----------------------------
-        # Chat / CoachBot (placeholder)
-        # -----------------------------
+        # Chat / CoachBot
         elif athlete_tab == "Chat / CoachBot":
             st.subheader("💬 Chat / CoachBot")
             st.info("This is a placeholder chat area. You can extend this later with a real chatbot.")
             st.text_area("Message", key="chat_msg")
             st.button("Send")
 
-        # -----------------------------
-        # Recovery Advice (placeholder)
-        # -----------------------------
+        # Recovery Advice
         elif athlete_tab == "Recovery Advice":
             st.subheader("🧊 Recovery Advice")
             st.write(
@@ -582,9 +544,7 @@ if mode == "Athlete Portal":
                 "- Stretching & mobility"
             )
 
-        # -----------------------------
         # Account / Family Info
-        # -----------------------------
         elif athlete_tab == "Account / Family Info":
             st.subheader("👨‍👩‍👧 Account / Family Info")
             fam = data.get("family_info", {})
@@ -641,11 +601,7 @@ if mode == "Coach Dashboard":
 
         coach_tab = st.radio(
             "Select Feature",
-            [
-                "Team Overview",
-                "Create/Assign Training Plans",
-                "View Athlete Logs (by username)",
-            ],
+            ["Team Overview", "Create/Assign Training Plans", "View Athlete Logs (by username)"],
         )
 
         if coach_tab == "Team Overview":
@@ -796,8 +752,7 @@ if mode == "Admin / Settings":
 
     st.subheader("(Optional) Legacy Coach Registration")
     st.write(
-        "The coach username/PIN system is no longer required if using share codes and team codes, "
-        "but you can still register if you want."
+        "The coach username/PIN system is optional. You can still register coach accounts here if you want."
     )
     cu = st.text_input("Coach username")
     cp = st.text_input("Coach PIN", type="password")
@@ -816,5 +771,3 @@ if mode == "Admin / Settings":
             st.info("No athlete files found.")
         else:
             st.write(files)
-
-
