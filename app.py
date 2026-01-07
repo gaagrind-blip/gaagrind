@@ -3,14 +3,17 @@ import json, os, datetime
 import pandas as pd
 import random
 import string
+import calendar as cal_mod
 
 # -----------------------------
 # File/Folder Setup
 # -----------------------------
 DATA_DIR = "data"
 ATHLETES_DIR = os.path.join(DATA_DIR, "athletes")
+
 TEAMS_FILE = os.path.join(DATA_DIR, "teams.json")
-FAMILY_LINKS_FILE = os.path.join(DATA_DIR, "family_links.json")
+FAMILY_LINKS_FILE = os.path.join(DATA_DIR, "family_links.json")   # single-child codes
+FAMILIES_FILE = os.path.join(DATA_DIR, "families.json")           # multi-child families (calendar)
 TRAINING_PLANS_DIR = os.path.join(DATA_DIR, "training_plans")
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -57,7 +60,6 @@ def athlete_file(username: str) -> str:
     return os.path.join(ATHLETES_DIR, clean_username(username) + ".json")
 
 def compute_weekly_summary(entries, minutes_key="minutes"):
-    """Assumes entries contain 'date' (YYYY-MM-DD) and a minutes_key."""
     week = datetime.date.today().isocalendar()[1]
     year = datetime.date.today().year
     total_minutes = 0
@@ -71,7 +73,7 @@ def compute_weekly_summary(entries, minutes_key="minutes"):
     return total_minutes
 
 def weekly_color(total_minutes):
-    # (Kept as-is from your previous version)
+    # Keeping your existing labels/thresholds as-is
     if total_minutes >= 300:
         return "🟢", "Excellent"
     elif total_minutes >= 240:
@@ -100,6 +102,9 @@ def stress_label(stress: int):
     else:
         return "🔴 Struggling", "Very high stress"
 
+# -----------------------------
+# Training Plans helpers
+# -----------------------------
 def plans_folder_for_team(team_code: str) -> str:
     return os.path.join(TRAINING_PLANS_DIR, f"team_{team_code}")
 
@@ -111,11 +116,7 @@ def ensure_folder(path: str):
 
 def list_plan_files(folder: str):
     ensure_folder(folder)
-    files = []
-    for fn in os.listdir(folder):
-        if fn.lower().endswith(".json"):
-            files.append(fn)
-    return sorted(files)
+    return sorted([fn for fn in os.listdir(folder) if fn.lower().endswith(".json")])
 
 def save_plan(folder: str, plan_name: str, plan_data: dict):
     ensure_folder(folder)
@@ -125,6 +126,9 @@ def save_plan(folder: str, plan_name: str, plan_data: dict):
 def load_plan(folder: str, filename: str):
     return load_json(os.path.join(folder, filename), {})
 
+# -----------------------------
+# Teams helpers
+# -----------------------------
 def generate_team_code(length=6):
     alphabet = string.ascii_uppercase + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
@@ -135,6 +139,9 @@ def load_teams():
 def save_teams(teams):
     save_json(TEAMS_FILE, teams)
 
+# -----------------------------
+# Family helpers (single-child + multi-child)
+# -----------------------------
 def load_family_links():
     return load_json(FAMILY_LINKS_FILE, {})
 
@@ -149,6 +156,63 @@ def link_family_code_to_athlete(code: str, athlete_username: str):
 def get_athlete_for_family_code(code: str):
     links = load_family_links()
     return links.get(code)
+
+def load_families():
+    """Multi-child families: {code: {family_name, children:[{username,color},...]}}"""
+    data = load_json(FAMILIES_FILE, {})
+    changed = False
+    for code, fam in data.items():
+        children = fam.get("children", [])
+        new_children = []
+        used_colors = set()
+        for child in children:
+            if isinstance(child, str):
+                username = child
+                color = None
+            else:
+                username = child.get("username")
+                color = child.get("color")
+            if not username:
+                continue
+            if not color:
+                # assign first unused colour
+                for c in ATHLETE_COLORS:
+                    if c not in used_colors:
+                        color = c
+                        break
+                else:
+                    color = random.choice(ATHLETE_COLORS)
+                changed = True
+            used_colors.add(color)
+            new_children.append({"username": clean_username(username), "color": color})
+        fam["children"] = new_children
+    if changed:
+        save_json(FAMILIES_FILE, data)
+    return data
+
+def save_families(families):
+    save_json(FAMILIES_FILE, families)
+
+def add_child_to_family(code: str, username: str):
+    """Ensures a family exists and includes this athlete (for compatibility + future)."""
+    code = (code or "").strip()
+    if not code:
+        return False
+    username = clean_username(username)
+    families = load_families()
+    fam = families.get(code, {"family_name": "Family", "children": []})
+    # Already exists?
+    for c in fam.get("children", []):
+        if c.get("username") == username:
+            families[code] = fam
+            save_families(families)
+            return True
+    used = {c.get("color") for c in fam.get("children", []) if c.get("color")}
+    col = next((c for c in ATHLETE_COLORS if c not in used), random.choice(ATHLETE_COLORS))
+    fam.setdefault("children", []).append({"username": username, "color": col})
+    families[code] = fam
+    save_families(families)
+    return True
 
 # -----------------------------
 # Login Functions
@@ -198,11 +262,7 @@ def check_coach(user, pin):
 # -----------------------------
 # Streamlit App Configuration
 # -----------------------------
-st.set_page_config(
-    page_title="Performance Pulse",
-    page_icon="🏐",
-    layout="wide",
-)
+st.set_page_config(page_title="Performance Pulse", page_icon="🏐", layout="wide")
 
 st.markdown(
     """
@@ -237,7 +297,6 @@ if mode == "Athlete Portal":
     st.header("🏋️ Athlete Portal")
     sub_mode = st.radio("Select:", ["Register", "Login"])
 
-    # Register
     if sub_mode == "Register":
         st.subheader("New Athlete Registration")
         new_user_raw = st.text_input("Username", key="reg_user")
@@ -272,7 +331,6 @@ if mode == "Athlete Portal":
                 )
                 st.success(f"Athlete {new_user} registered! You can now log in.")
 
-    # Login
     elif sub_mode == "Login" and not st.session_state["athlete_logged_in"]:
         st.subheader("Athlete Login")
         u_raw = st.text_input("Username", key="login_user")
@@ -288,7 +346,6 @@ if mode == "Athlete Portal":
                 st.session_state["athlete_data"] = data
                 st.success(f"Welcome {u}")
 
-    # Main area
     if st.session_state["athlete_logged_in"]:
         u = st.session_state["athlete_user"]
         data = st.session_state["athlete_data"]
@@ -311,7 +368,6 @@ if mode == "Athlete Portal":
             ],
         )
 
-        # Training Log
         if athlete_tab == "Training Log":
             st.subheader("📅 Training Log")
             entries = data.get("training_log", [])
@@ -328,9 +384,7 @@ if mode == "Athlete Portal":
                 notes = st.text_area("Notes", key="train_notes")
 
             if st.button("Add Training Entry"):
-                entries.append(
-                    {"date": date.strftime("%Y-%m-%d"), "minutes": int(minutes), "type": session_type, "notes": notes}
-                )
+                entries.append({"date": date.strftime("%Y-%m-%d"), "minutes": int(minutes), "type": session_type, "notes": notes})
                 data["training_log"] = entries
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -342,7 +396,6 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Gym/Cardio & Goals
         elif athlete_tab == "Gym/Cardio & Goals":
             st.subheader("🏋️ Gym/Cardio & Goals")
             goals = data.get("goals", {})
@@ -376,10 +429,8 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Diet / Macros
         elif athlete_tab == "Diet / Macros":
             st.subheader("🥗 Diet / Macros")
-            st.write("Log meals / notes (simple tracker).")
             ddate = st.date_input("Date", value=datetime.date.today(), key="diet_date")
             meal = st.selectbox("Meal", ["Breakfast", "Lunch", "Dinner", "Snack"], key="diet_meal")
             desc = st.text_area("What did you eat?", key="diet_desc")
@@ -397,11 +448,8 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Training Plans
         elif athlete_tab == "Training Plans":
             st.subheader("🗂️ Training Plans")
-            st.write("Plans can be personal or assigned via team code (Coach).")
-
             teams = data.get("teams", [])
             colA, colB = st.columns(2)
             with colA:
@@ -410,11 +458,9 @@ if mode == "Athlete Portal":
                 files = list_plan_files(folder)
                 if files:
                     selected = st.selectbox("Select a personal plan", files, key="ath_plan_select")
-                    plan = load_plan(folder, selected)
-                    st.json(plan)
+                    st.json(load_plan(folder, selected))
                 else:
                     st.info("No personal plans yet.")
-
             with colB:
                 st.write("### Team Plans")
                 if not teams:
@@ -425,12 +471,10 @@ if mode == "Athlete Portal":
                     team_files = list_plan_files(team_folder)
                     if team_files:
                         sel = st.selectbox("Select a team plan", team_files, key="ath_team_plan_select")
-                        plan = load_plan(team_folder, sel)
-                        st.json(plan)
+                        st.json(load_plan(team_folder, sel))
                     else:
                         st.info("No team plans available yet for this team.")
 
-        # Fixtures
         elif athlete_tab == "Fixtures":
             st.subheader("📆 Fixtures")
             fixtures = data.get("fixtures", [])
@@ -449,7 +493,6 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Homework / Study
         elif athlete_tab == "Homework / Study":
             st.subheader("📚 Homework / Study")
             slog = data.get("study_log", [])
@@ -469,31 +512,17 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Mental Wellbeing (✅ FIXED LABEL)
         elif athlete_tab == "Mental Wellbeing":
             st.subheader("🧠 Mental Wellbeing")
             wlog = data.get("wellbeing_log", [])
             wdate = st.date_input("Date", value=datetime.date.today(), key="wb_date")
             mood = st.selectbox("Mood", ["😀 Great", "🙂 Good", "😐 Ok", "😟 Low", "😢 Struggling"], key="wb_mood")
-            stress = st.slider(
-                "Stress level (1-10)",
-                1, 10, 5,
-                key="wb_stress"
-            )
-            # ✅ Correct interpretation preview
+            stress = st.slider("Stress level (1-10)", 1, 10, 5, key="wb_stress")
             band, desc = stress_label(int(stress))
             st.info(f"Current selection: **{stress}/10** — **{band}** ({desc})")
-
             wnote = st.text_area("Notes", key="wb_notes")
             if st.button("Add Wellbeing Entry"):
-                wlog.append(
-                    {
-                        "date": wdate.strftime("%Y-%m-%d"),
-                        "mood": mood,
-                        "stress": int(stress),
-                        "notes": wnote,
-                    }
-                )
+                wlog.append({"date": wdate.strftime("%Y-%m-%d"), "mood": mood, "stress": int(stress), "notes": wnote})
                 data["wellbeing_log"] = wlog
                 save_athlete(u, data)
                 st.session_state["athlete_data"] = data
@@ -504,7 +533,6 @@ if mode == "Athlete Portal":
                 df = df.dropna(subset=["date"]).sort_values("date", ascending=False)
                 st.dataframe(df, use_container_width=True)
 
-        # Teams & Coach Codes
         elif athlete_tab == "Teams & Coach Codes":
             st.subheader("👥 Teams & Coach Codes")
             teams = data.get("teams", [])
@@ -526,25 +554,16 @@ if mode == "Athlete Portal":
                     else:
                         st.info("Already joined that team.")
 
-        # Chat / CoachBot
         elif athlete_tab == "Chat / CoachBot":
             st.subheader("💬 Chat / CoachBot")
-            st.info("This is a placeholder chat area. You can extend this later with a real chatbot.")
+            st.info("Placeholder chat area.")
             st.text_area("Message", key="chat_msg")
             st.button("Send")
 
-        # Recovery Advice
         elif athlete_tab == "Recovery Advice":
             st.subheader("🧊 Recovery Advice")
-            st.write(
-                "- Sleep 8-10 hours\n"
-                "- Hydration\n"
-                "- Balanced meals\n"
-                "- Light recovery session\n"
-                "- Stretching & mobility"
-            )
+            st.write("- Sleep 8-10 hours\n- Hydration\n- Balanced meals\n- Light recovery session\n- Stretching & mobility")
 
-        # Account / Family Info
         elif athlete_tab == "Account / Family Info":
             st.subheader("👨‍👩‍👧 Account / Family Info")
             fam = data.get("family_info", {})
@@ -561,12 +580,14 @@ if mode == "Athlete Portal":
 
             st.write("---")
             st.write("### Family Dashboard Code (optional)")
-            code = st.text_input("Create a code to share with parent/guardian", key="fam_code_input")
+            code = st.text_input("Create / use a family code to share with parent/guardian", key="fam_code_input")
             if st.button("Link Code"):
                 if not code:
                     st.error("Enter a code.")
                 else:
-                    link_family_code_to_athlete(code, u)
+                    # Save in BOTH systems for max compatibility:
+                    link_family_code_to_athlete(code, u)        # single-child
+                    add_child_to_family(code, u)               # multi-child calendar
                     st.success("Code linked. Parent/guardian can use this in Parent / Guardian mode.")
 
         st.write("---")
@@ -636,7 +657,7 @@ if mode == "Coach Dashboard":
             else:
                 team_code = st.selectbox("Select Team Code", list(teams.keys()), key="coach_plan_team")
                 plan_name = st.text_input("Plan name", key="coach_plan_name")
-                plan_text = st.text_area("Plan content (write a structured plan / JSON-friendly text)", key="coach_plan_text")
+                plan_text = st.text_area("Plan content", key="coach_plan_text")
                 if st.button("Save Team Plan", key="coach_save_team_plan"):
                     if not plan_name:
                         st.error("Enter a plan name.")
@@ -685,64 +706,186 @@ if mode == "Coach Dashboard":
             st.success("Logged out.")
 
 # -----------------------------
-# Parent / Guardian
+# Parent / Guardian (✅ Calendar restored)
 # -----------------------------
 if mode == "Parent / Guardian":
     st.header("👨‍👩‍👧 Parent / Guardian Dashboard")
-    st.write("Enter the family dashboard code given by the athlete.")
+    st.write("Enter the family code given by the athlete.")
 
     code = st.text_input("Family Code", key="parent_code")
+
     if st.button("Open Dashboard"):
-        athlete_user = get_athlete_for_family_code(code)
-        if not athlete_user:
-            st.error("Code not found.")
+        st.session_state["parent_code_active"] = (code or "").strip()
+
+    active_code = st.session_state.get("parent_code_active", "").strip()
+
+    if not active_code:
+        st.info("Enter a valid family code above to view the dashboard.")
+    else:
+        # 1) Try multi-child families first
+        families = load_families()
+        children = []
+        family_name = "Family"
+
+        if active_code in families:
+            family = families.get(active_code, {})
+            family_name = family.get("family_name", "Family")
+            children = family.get("children", [])  # list of {username,color}
         else:
-            file = athlete_file(athlete_user)
-            if not os.path.exists(file):
-                st.error("Linked athlete profile not found.")
-            else:
-                ad = load_json(file, {})
-                st.success(f"Dashboard for athlete: {athlete_user}")
+            # 2) Fallback to single-child code mapping
+            single_user = get_athlete_for_family_code(active_code)
+            if single_user:
+                children = [{"username": clean_username(single_user), "color": ATHLETE_COLORS[0]}]
 
-                tlog = ad.get("training_log", [])
-                glog = ad.get("gym_log", [])
-                wlog = ad.get("wellbeing_log", [])
-                slog = ad.get("study_log", [])
+        if not children:
+            st.error("Family code not found. Please check and try again.")
+        else:
+            tab1, tab2 = st.tabs(["Dashboard", "Family Weekly & Monthly Calendar"])
 
-                st.write("### Weekly Summary")
-                training_mins = compute_weekly_summary(tlog, "minutes")
-                gym_mins = compute_weekly_summary(glog, "minutes")
-                study_mins = compute_weekly_summary(slog, "minutes")
-                st.metric("Training minutes (this week)", training_mins)
-                st.metric("Gym/Cardio minutes (this week)", gym_mins)
-                st.metric("Study minutes (this week)", study_mins)
+            # ---------------- Dashboard (kept simple)
+            with tab1:
+                # If multiple kids, choose one for the standard dashboard view
+                if len(children) > 1:
+                    pick = st.selectbox("Select athlete", [c["username"] for c in children], key="parent_pick_child")
+                    child_obj = next((c for c in children if c["username"] == pick), children[0])
+                else:
+                    child_obj = children[0]
+
+                athlete_user = clean_username(child_obj["username"])
+                file = athlete_file(athlete_user)
+
+                if not os.path.exists(file):
+                    st.error("Linked athlete profile not found.")
+                else:
+                    ad = load_json(file, {})
+                    st.success(f"{family_name} — dashboard for athlete: **{athlete_user}**")
+
+                    tlog = ad.get("training_log", [])
+                    glog = ad.get("gym_log", [])
+                    wlog = ad.get("wellbeing_log", [])
+                    slog = ad.get("study_log", [])
+
+                    st.write("### Weekly Summary")
+                    st.metric("Training minutes (this week)", compute_weekly_summary(tlog, "minutes"))
+                    st.metric("Gym/Cardio minutes (this week)", compute_weekly_summary(glog, "minutes"))
+                    st.metric("Study minutes (this week)", compute_weekly_summary(slog, "minutes"))
+
+                    st.write("---")
+                    st.write("### Recent Entries")
+                    if tlog:
+                        df = pd.DataFrame(tlog)
+                        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
+                        st.write("**Training**")
+                        st.dataframe(df, use_container_width=True)
+                    if glog:
+                        df = pd.DataFrame(glog)
+                        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
+                        st.write("**Gym/Cardio**")
+                        st.dataframe(df, use_container_width=True)
+                    if wlog:
+                        df = pd.DataFrame(wlog)
+                        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
+                        st.write("**Wellbeing**")
+                        st.dataframe(df, use_container_width=True)
+                    if slog:
+                        df = pd.DataFrame(slog)
+                        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
+                        st.write("**Study**")
+                        st.dataframe(df, use_container_width=True)
+
+            # ---------------- Family Weekly & Monthly Calendar (RESTORED)
+            with tab2:
+                st.subheader("Family View")
+                st.caption("Weekly view shows training minutes per day; monthly view shows total training minutes per day.")
+
+                today = datetime.date.today()
+                current_week = today.isocalendar()[1]
+                current_year = today.year
+
+                # --- Collect training log entries for all children
+                weekly_rows = []
+                monthly_totals = {}   # date -> total minutes
+                per_child_weekly = {} # child -> weekly total minutes
+
+                for child in children:
+                    username = clean_username(child.get("username"))
+                    per_child_weekly.setdefault(username, 0)
+
+                    afile = athlete_file(username)
+                    if not os.path.exists(afile):
+                        continue
+                    ad = load_json(afile, {})
+                    tlog = ad.get("training_log", [])
+
+                    for e in tlog:
+                        try:
+                            d = datetime.datetime.strptime(e.get("date", ""), "%Y-%m-%d").date()
+                        except Exception:
+                            continue
+
+                        mins = int(e.get("minutes", 0))
+
+                        # weekly
+                        if d.year == current_year and d.isocalendar()[1] == current_week:
+                            weekly_rows.append(
+                                {
+                                    "Date": d,
+                                    "Athlete": username,
+                                    "Minutes": mins,
+                                    "Type": e.get("type", ""),
+                                    "Notes": e.get("notes", ""),
+                                }
+                            )
+                            per_child_weekly[username] += mins
+
+                        # monthly (current month)
+                        if d.year == today.year and d.month == today.month:
+                            monthly_totals[d] = monthly_totals.get(d, 0) + mins
+
+                # Weekly table + totals
+                if weekly_rows:
+                    wdf = pd.DataFrame(weekly_rows)
+                    wdf["Date"] = pd.to_datetime(wdf["Date"])
+                    wdf = wdf.sort_values("Date", ascending=True)
+                    st.write("### Weekly Calendar (Training)")
+                    st.dataframe(wdf, use_container_width=True)
+
+                    st.write("### Weekly Totals (Training Minutes)")
+                    totals_df = pd.DataFrame(
+                        [{"Athlete": k, "Minutes": v} for k, v in sorted(per_child_weekly.items(), key=lambda x: x[0])]
+                    )
+                    st.dataframe(totals_df, use_container_width=True)
+                else:
+                    st.info("No training entries found for the current week.")
 
                 st.write("---")
-                st.write("### Recent Entries")
-                if tlog:
-                    df = pd.DataFrame(tlog)
-                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-                    df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
-                    st.write("**Training**")
-                    st.dataframe(df, use_container_width=True)
-                if glog:
-                    df = pd.DataFrame(glog)
-                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-                    df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
-                    st.write("**Gym/Cardio**")
-                    st.dataframe(df, use_container_width=True)
-                if wlog:
-                    df = pd.DataFrame(wlog)
-                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-                    df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
-                    st.write("**Wellbeing**")
-                    st.dataframe(df, use_container_width=True)
-                if slog:
-                    df = pd.DataFrame(slog)
-                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-                    df = df.dropna(subset=["date"]).sort_values("date", ascending=False).head(10)
-                    st.write("**Study**")
-                    st.dataframe(df, use_container_width=True)
+
+                # Monthly view as a calendar-like grid (text)
+                st.write(f"### Monthly Calendar — {today.strftime('%B %Y')}")
+                first_day = datetime.date(today.year, today.month, 1)
+                last_day_num = cal_mod.monthrange(today.year, today.month)[1]
+                last_day = datetime.date(today.year, today.month, last_day_num)
+
+                # Build a simple day-by-day table for the month
+                month_rows = []
+                d = first_day
+                while d <= last_day:
+                    month_rows.append(
+                        {
+                            "Date": d,
+                            "Day": d.strftime("%a"),
+                            "Training Minutes": monthly_totals.get(d, 0),
+                        }
+                    )
+                    d += datetime.timedelta(days=1)
+
+                mdf = pd.DataFrame(month_rows)
+                mdf["Date"] = pd.to_datetime(mdf["Date"])
+                st.dataframe(mdf, use_container_width=True)
 
 # -----------------------------
 # Admin / Settings
@@ -750,24 +893,15 @@ if mode == "Parent / Guardian":
 if mode == "Admin / Settings":
     st.header("⚙️ Admin Settings")
 
-    st.subheader("(Optional) Legacy Coach Registration")
-    st.write(
-        "The coach username/PIN system is optional. You can still register coach accounts here if you want."
-    )
+    st.subheader("(Optional) Coach Registration")
     cu = st.text_input("Coach username")
     cp = st.text_input("Coach PIN", type="password")
     if st.button("Register Coach"):
         ok, msg = register_coach(cu, cp)
-        if ok:
-            st.success(msg)
-        else:
-            st.error(msg)
+        st.success(msg) if ok else st.error(msg)
 
     st.write("---")
     st.subheader("Debug: List Saved Athletes")
     if st.button("Show athlete files"):
         files = sorted([f for f in os.listdir(ATHLETES_DIR) if f.lower().endswith(".json")])
-        if not files:
-            st.info("No athlete files found.")
-        else:
-            st.write(files)
+        st.info("No athlete files found.") if not files else st.write(files)
